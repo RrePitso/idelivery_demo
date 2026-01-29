@@ -1,16 +1,18 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { ref, onValue } from 'firebase/database';
 import { auth, db } from './firebase';
-import { DriverProfile, AuthState } from './types';
+import { AuthState } from './types';
 
 // Pages
 import Landing from './pages/Landing';
 import SignUp from './pages/SignUp';
+import SignIn from './pages/SignIn';
 import Dashboard from './pages/Dashboard';
 import Confirmation from './pages/Confirmation';
+import BotSimulator from './pages/BotSimulator';
 
 // Components
 import Navbar from './components/Navbar';
@@ -38,7 +40,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // Fetch driver profile from RTDB
         const driverRef = ref(db, `drivers/${user.uid}`);
         onValue(driverRef, (snapshot) => {
           const data = snapshot.val();
@@ -77,13 +78,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   if (state.loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#50B848]"></div>
       </div>
     );
   }
   
   if (!state.user) {
-    return <Navigate to="/drivers/signup" replace />;
+    return <Navigate to="/drivers/signin" replace />;
   }
   
   return <>{children}</>;
@@ -100,7 +101,9 @@ const App: React.FC = () => {
               <Route path="/" element={<Navigate to="/drivers" replace />} />
               <Route path="/drivers" element={<Landing />} />
               <Route path="/drivers/signup" element={<SignUp />} />
+              <Route path="/drivers/signin" element={<SignIn />} />
               <Route path="/drivers/confirmation" element={<Confirmation />} />
+              <Route path="/drivers/simulator" element={<BotSimulator />} />
               <Route 
                 path="/drivers/dashboard" 
                 element={
