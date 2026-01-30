@@ -10,6 +10,7 @@ export enum ParcelStatus {
   COLLECTING_PICKUP = 'COLLECTING_PICKUP',
   COLLECTING_DROPOFF = 'COLLECTING_DROPOFF',
   COLLECTING_DESCRIPTION = 'COLLECTING_DESCRIPTION',
+  COLLECTING_PAYMENT = 'COLLECTING_PAYMENT',
   READY_FOR_DRIVER_MATCHING = 'READY_FOR_DRIVER_MATCHING',
   CANCELLED = 'CANCELLED',
   COMPLETED = 'COMPLETED'
@@ -22,6 +23,7 @@ export interface ParcelRequest {
   pickup_location: string | null;
   dropoff_location: string | null;
   parcel_description: string | null;
+  payment_method: string | null;
   created_at: number;
 }
 

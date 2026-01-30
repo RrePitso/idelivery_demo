@@ -10,52 +10,67 @@ export interface WhatsAppPayload {
   destination: string;
   userName: string;
   templateParams?: string[];
-  message?: string; // For session messages
+  message?: string; 
+  campaignName?: string; 
 }
 
+/**
+ * Normalizes phone numbers to E.164 format (+27XXXXXXXXX)
+ */
 export const formatSAFullPhone = (phone: string): string => {
+  if (!phone) return '';
   let cleaned = phone.replace(/\s+/g, '').replace(/[^0-9]/g, '').trim();
-  if (cleaned.startsWith('0') && cleaned.length === 10) return '+27' + cleaned.substring(1);
-  if (cleaned.startsWith('27') && cleaned.length === 11) return '+' + cleaned;
-  if (phone.trim().startsWith('+')) return phone.trim();
-  if (cleaned.length === 9) return '+27' + cleaned;
-  return phone.trim().startsWith('+') ? phone.trim() : `+${cleaned}`;
+  
+  // South Africa specific formatting
+  if (cleaned.startsWith('0') && cleaned.length === 10) {
+    return '+27' + cleaned.substring(1);
+  }
+  if (cleaned.startsWith('27') && cleaned.length === 11) {
+    return '+' + cleaned;
+  }
+  if (cleaned.length === 9) {
+    return '+27' + cleaned;
+  }
+  
+  // Fallback
+  return phone.startsWith('+') ? phone : `+${cleaned}`;
 };
 
 /**
- * Sends a WhatsApp message. If 'message' is provided, it sends a raw session message.
- * If 'templateParams' is provided, it sends a template message.
+ * Sends a WhatsApp message via AiSensy.
  */
 export const sendWhatsAppMessage = async ({
   destination,
   userName,
   templateParams,
   message,
+  campaignName,
 }: WhatsAppPayload) => {
-  if (!destination) return;
+  if (!destination) {
+    console.error('WhatsApp Error: No destination phone number provided.');
+    return null;
+  }
 
   const formattedDestination = formatSAFullPhone(destination);
   
-  // Construct payload based on whether it's a template or session message
   const payload: any = {
     apiKey: AISENSY_API_KEY,
     destination: formattedDestination,
-    userName: userName,
+    userName: userName || 'Customer',
   };
 
   if (message) {
-    // Session Message Logic (Standard text)
-    // Note: AiSensy often uses 'campaignName' even for session messages if set up that way, 
-    // but typically raw messages use the 'message' object.
-    payload.campaignName = 'Session Message'; 
+    // Session Message (Standard text response)
+    // Production Note: We use a generic campaign for all session messages
+    payload.campaignName = campaignName || 'Session_Message'; 
     payload.message = {
       type: 'text',
       text: message
     };
-  } else if (templateParams) {
-    // Template Message Logic
-    payload.campaignName = 'Test Campain';
-    payload.templateParams = templateParams;
+  } else {
+    // Template Message (High reliability start of conversation)
+    payload.campaignName = campaignName || 'welcome_idelivery';
+    payload.templateParams = templateParams || [];
   }
 
   try {
@@ -64,12 +79,28 @@ export const sendWhatsAppMessage = async ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    return await response.json();
+    
+    const result = await response.json();
+    if (!response.ok || result.status === 'error') {
+      console.error('AiSensy API Error:', result);
+    }
+    return result;
   } catch (error) {
-    console.error('WhatsApp Error:', error);
+    console.error('Network Error calling AiSensy:', error);
     return null;
   }
 };
 
-// Keeping original for backward compatibility with existing files
+/**
+ * High-reliability Welcome message using approved template.
+ */
+export const sendWelcomeTemplate = async (phone: string) => {
+  return sendWhatsAppMessage({
+    destination: phone,
+    userName: 'Customer',
+    campaignName: 'welcome_idelivery',
+    templateParams: [] 
+  });
+};
+
 export const sendWhatsAppSignupNotification = (data: WhatsAppPayload) => sendWhatsAppMessage(data);
