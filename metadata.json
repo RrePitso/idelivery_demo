@@ -1,5 +1,7 @@
 {
   "name": "iDelivery Driver Portal",
   "description": "A comprehensive mobile-first driver onboarding and management platform for iDelivery partners, featuring Firebase authentication and real-time status tracking.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }

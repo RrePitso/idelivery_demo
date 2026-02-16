@@ -1,6 +1,7 @@
 
 /**
  * Utility for sending WhatsApp notifications using AiSensy API
+ * Optimized based on successful CURL implementation for the iDelivery platform.
  */
 
 const AISENSY_API_URL = 'https://backend.aisensy.com/campaign/t1/api/v2';
@@ -12,42 +13,46 @@ export interface WhatsAppPayload {
   templateParams?: string[];
   message?: string; 
   campaignName?: string; 
+  source?: string;
 }
 
 /**
- * Normalizes phone numbers to E.164 format (+27XXXXXXXXX)
+ * Normalizes phone numbers to digits-only format as required by AiSensy (e.g., 27XXXXXXXXX)
  */
 export const formatSAFullPhone = (phone: string): string => {
   if (!phone) return '';
   let cleaned = phone.replace(/\s+/g, '').replace(/[^0-9]/g, '').trim();
   
-  // South Africa specific formatting
+  // South Africa specific formatting for 10-digit local numbers
   if (cleaned.startsWith('0') && cleaned.length === 10) {
-    return '+27' + cleaned.substring(1);
+    return '27' + cleaned.substring(1);
   }
-  if (cleaned.startsWith('27') && cleaned.length === 11) {
-    return '+' + cleaned;
+  // Already has country code
+  if (cleaned.startsWith('27') && (cleaned.length === 11 || cleaned.length === 12)) {
+    return cleaned;
   }
+  // Short format (9 digits)
   if (cleaned.length === 9) {
-    return '+27' + cleaned;
+    return '27' + cleaned;
   }
   
-  // Fallback
-  return phone.startsWith('+') ? phone : `+${cleaned}`;
+  return cleaned;
 };
 
 /**
- * Sends a WhatsApp message via AiSensy.
+ * Core function to send WhatsApp messages via AiSensy.
+ * Strictly follows the working implementation provided.
  */
 export const sendWhatsAppMessage = async ({
   destination,
   userName,
-  templateParams,
+  templateParams = [],
   message,
   campaignName,
+  source = 'new-landing-page form',
 }: WhatsAppPayload) => {
   if (!destination) {
-    console.error('WhatsApp Error: No destination phone number provided.');
+    console.warn('WhatsApp Warning: No destination phone number provided.');
     return null;
   }
 
@@ -56,21 +61,28 @@ export const sendWhatsAppMessage = async ({
   const payload: any = {
     apiKey: AISENSY_API_KEY,
     destination: formattedDestination,
-    userName: userName || 'Customer',
+    userName: userName || 'iDelivery',
+    templateParams: templateParams,
+    source: source,
+    media: {},
+    buttons: [],
+    carouselCards: [],
+    location: {},
+    attributes: {},
+    paramsFallbackValue: {}
   };
 
   if (message) {
-    // Session Message (Standard text response)
-    // Production Note: We use a generic campaign for all session messages
+    // If a raw message is provided, we treat it as a session message logic
+    // but the iDelivery preference is to use templates for reliability.
     payload.campaignName = campaignName || 'Session_Message'; 
     payload.message = {
       type: 'text',
       text: message
     };
   } else {
-    // Template Message (High reliability start of conversation)
-    payload.campaignName = campaignName || 'welcome_idelivery';
-    payload.templateParams = templateParams || [];
+    // Template Message (Preferred)
+    payload.campaignName = campaignName || 'driver_welcome';
   }
 
   try {
@@ -81,9 +93,7 @@ export const sendWhatsAppMessage = async ({
     });
     
     const result = await response.json();
-    if (!response.ok || result.status === 'error') {
-      console.error('AiSensy API Error:', result);
-    }
+    console.debug('AiSensy API Response:', result);
     return result;
   } catch (error) {
     console.error('Network Error calling AiSensy:', error);
@@ -92,14 +102,28 @@ export const sendWhatsAppMessage = async ({
 };
 
 /**
- * High-reliability Welcome message using approved template.
+ * Triggers the "driver_welcome" template campaign after successful signup.
+ */
+export const sendDriverWelcomeCampaign = async (phone: string) => {
+  return sendWhatsAppMessage({
+    destination: phone,
+    userName: 'iDelivery',
+    campaignName: 'driver_welcome',
+    templateParams: [],
+    source: 'new-landing-page form'
+  });
+};
+
+/**
+ * Standard welcome for customers.
  */
 export const sendWelcomeTemplate = async (phone: string) => {
   return sendWhatsAppMessage({
     destination: phone,
     userName: 'Customer',
     campaignName: 'welcome_idelivery',
-    templateParams: [] 
+    templateParams: [],
+    source: 'bot-simulator'
   });
 };
 

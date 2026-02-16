@@ -1,10 +1,12 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { onAuthStateChanged } from 'firebase/auth';
-import { ref, onValue } from 'firebase/database';
+// Fix: Access react-router-dom members via namespaced import to resolve 'no exported member' issues
+import * as Router from 'react-router-dom';
+// Fix: Access firebase/auth members via namespaced import
+import * as FirebaseAuth from 'firebase/auth';
+import { ref, onValue, get } from 'firebase/database';
 import { auth, db } from './firebase';
-import { AuthState } from './types';
+import { AuthState, DriverProfile, CustomerProfile, DriverStatus } from './types';
 
 // Pages
 import Landing from './pages/Landing';
@@ -13,6 +15,10 @@ import SignIn from './pages/SignIn';
 import Dashboard from './pages/Dashboard';
 import Confirmation from './pages/Confirmation';
 import BotSimulator from './pages/BotSimulator';
+import PlaceOrder from './pages/PlaceOrder';
+import CustomerAuth from './pages/CustomerAuth';
+import CustomerDashboard from './pages/CustomerDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 
 // Components
 import Navbar from './components/Navbar';
@@ -35,18 +41,54 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     user: null,
     loading: true,
     driverProfile: null,
+    customerProfile: null,
+    userType: null,
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    // Fix: use FirebaseAuth namespace
+    const unsubscribe = FirebaseAuth.onAuthStateChanged(auth, async (user) => {
       if (user) {
+        // 1. Check for Admin
+        if (user.email === 'admin@idelivery.com') {
+          setState({
+            user,
+            loading: false,
+            driverProfile: null,
+            customerProfile: null,
+            userType: 'admin',
+          });
+          return;
+        }
+
+        // 2. Try to fetch driver profile
         const driverRef = ref(db, `drivers/${user.uid}`);
-        onValue(driverRef, (snapshot) => {
+        const driverSnap = await get(driverRef);
+        
+        if (driverSnap.exists()) {
+          onValue(driverRef, (snapshot) => {
+            const data = snapshot.val();
+            setState({
+              user,
+              loading: false,
+              driverProfile: data,
+              customerProfile: null,
+              userType: 'driver',
+            });
+          });
+          return;
+        }
+
+        // 3. Try to fetch customer profile
+        const customerRef = ref(db, `customers/${user.uid}`);
+        onValue(customerRef, (snapshot) => {
           const data = snapshot.val();
           setState({
             user,
             loading: false,
-            driverProfile: data,
+            driverProfile: null,
+            customerProfile: data,
+            userType: 'customer',
           });
         });
       } else {
@@ -54,6 +96,8 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           user: null,
           loading: false,
           driverProfile: null,
+          customerProfile: null,
+          userType: null,
         });
       }
     });
@@ -72,7 +116,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   );
 };
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode, type?: 'driver' | 'customer' | 'admin' }> = ({ children, type }) => {
   const { state } = useAuth();
   
   if (state.loading) {
@@ -84,7 +128,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
   
   if (!state.user) {
-    return <Navigate to="/drivers/signin" replace />;
+    return <Router.Navigate to={type === 'driver' ? "/drivers/signin" : type === 'admin' ? "/drivers/signin" : "/customer/auth"} replace />;
+  }
+
+  if (type && state.userType !== type) {
+    return <Router.Navigate to="/" replace />;
   }
   
   return <>{children}</>;
@@ -93,29 +141,63 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <HashRouter>
+      <Router.HashRouter>
         <div className="min-h-screen flex flex-col">
           <Navbar />
           <main className="flex-grow">
-            <Routes>
-              <Route path="/" element={<Navigate to="/drivers" replace />} />
-              <Route path="/drivers" element={<Landing />} />
-              <Route path="/drivers/signup" element={<SignUp />} />
-              <Route path="/drivers/signin" element={<SignIn />} />
-              <Route path="/drivers/confirmation" element={<Confirmation />} />
-              <Route path="/drivers/simulator" element={<BotSimulator />} />
-              <Route 
+            <Router.Routes>
+              <Router.Route path="/" element={<Landing />} />
+              
+              {/* Driver Routes */}
+              <Router.Route path="/drivers" element={<Landing />} />
+              <Router.Route path="/drivers/signup" element={<SignUp />} />
+              <Router.Route path="/drivers/signin" element={<SignIn />} />
+              <Router.Route path="/drivers/confirmation" element={<Confirmation />} />
+              <Router.Route path="/drivers/simulator" element={<BotSimulator />} />
+              <Router.Route 
                 path="/drivers/dashboard" 
                 element={
-                  <ProtectedRoute>
+                  <ProtectedRoute type="driver">
                     <Dashboard />
                   </ProtectedRoute>
                 } 
               />
-            </Routes>
+
+              {/* Customer Routes */}
+              <Router.Route path="/customer/auth" element={<CustomerAuth />} />
+              <Router.Route 
+                path="/customer/dashboard" 
+                element={
+                  <ProtectedRoute type="customer">
+                    <CustomerDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Router.Route 
+                path="/customer/order" 
+                element={
+                  <ProtectedRoute type="customer">
+                    <PlaceOrder />
+                  </ProtectedRoute>
+                } 
+              />
+
+              {/* Admin Routes */}
+              <Router.Route 
+                path="/admin/dashboard" 
+                element={
+                  <ProtectedRoute type="admin">
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+
+              {/* Redirect legacy /order to authenticated flow */}
+              <Router.Route path="/order" element={<Router.Navigate to="/customer/order" replace />} />
+            </Router.Routes>
           </main>
         </div>
-      </HashRouter>
+      </Router.HashRouter>
     </AuthProvider>
   );
 };

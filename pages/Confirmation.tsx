@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+// Fix: Use namespaced import for Link
+import * as Router from 'react-router-dom';
 
 const Confirmation: React.FC = () => {
   return (
@@ -18,18 +19,18 @@ const Confirmation: React.FC = () => {
           Welcome to the family. You're all set to start delivering in Alice. Hop on your dashboard and go online to see requests.
         </p>
         <div className="space-y-4">
-          <Link
+          <Router.Link
             to="/drivers/dashboard"
             className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-bold rounded-md text-white bg-[#F58220] hover:bg-orange-600 md:py-4 md:text-lg transition-colors shadow-lg shadow-orange-100"
           >
             Go to Dashboard
-          </Link>
-          <Link
+          </Router.Link>
+          <Router.Link
             to="/drivers"
             className="block text-sm font-medium text-gray-500 hover:text-[#50B848]"
           >
             Back to Home
-          </Link>
+          </Router.Link>
         </div>
       </div>
     </div>

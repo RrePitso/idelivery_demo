@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+// Fix: Use namespaced imports for router and auth
+import * as Router from 'react-router-dom';
+import * as FirebaseAuth from 'firebase/auth';
 import { auth } from '../firebase';
 
 const SignIn: React.FC = () => {
-  const navigate = useNavigate();
+  const navigate = Router.useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
@@ -22,12 +23,43 @@ const SignIn: React.FC = () => {
     setLoading(true);
     setError('');
 
+    const isAdminEmail = formData.email.trim().toLowerCase() === 'admin@idelivery.com';
+
     try {
-      await signInWithEmailAndPassword(auth, formData.email, formData.password);
-      navigate('/drivers/dashboard');
+      if (isAdminEmail) {
+        try {
+          // 1. Try to sign in
+          await FirebaseAuth.signInWithEmailAndPassword(auth, formData.email, formData.password);
+          navigate('/admin/dashboard');
+        } catch (adminErr: any) {
+          // 2. If sign-in fails and password is the master key, attempt to create
+          // We check for user-not-found OR invalid-credential (which modern Firebase uses for both)
+          if (formData.password === 'idelivery') {
+            try {
+              await FirebaseAuth.createUserWithEmailAndPassword(auth, formData.email, 'idelivery');
+              navigate('/admin/dashboard');
+            } catch (createErr: any) {
+              // If creation fails with email-already-in-use, it means the password was changed from 'idelivery'
+              if (createErr.code === 'auth/email-already-in-use') {
+                throw new Error('Invalid password for admin account.');
+              }
+              throw createErr;
+            }
+          } else {
+            throw adminErr;
+          }
+        }
+      } else {
+        await FirebaseAuth.signInWithEmailAndPassword(auth, formData.email, formData.password);
+        navigate('/drivers/dashboard');
+      }
     } catch (err: any) {
-      console.error(err);
-      setError('Invalid email or password. Please try again.');
+      console.error("Sign in error:", err);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found') {
+        setError('Invalid email or password. Please try again.');
+      } else {
+        setError(err.message || 'An error occurred during sign in.');
+      }
     } finally {
       setLoading(false);
     }
@@ -41,9 +73,9 @@ const SignIn: React.FC = () => {
         </h2>
         <p className="mt-2 text-sm text-gray-600">
           Not a driver yet?{' '}
-          <Link to="/drivers/signup" className="font-bold text-[#F58220] hover:text-orange-600">
+          <Router.Link to="/drivers/signup" className="font-bold text-[#F58220] hover:text-orange-600">
             Sign up here
-          </Link>
+          </Router.Link>
         </p>
       </div>
 

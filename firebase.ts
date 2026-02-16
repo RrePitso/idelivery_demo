@@ -1,6 +1,7 @@
 
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
+// Fix: Use namespaced imports to ensure compatibility with environments having module resolution issues
+import * as authExports from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 
 const firebaseConfig = {
@@ -15,7 +16,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
+export const auth = authExports.getAuth(app);
 export const db = getDatabase(app);
-export const googleProvider = new GoogleAuthProvider();
-export const appleProvider = new OAuthProvider('apple.com');
+export const googleProvider = new authExports.GoogleAuthProvider();
+export const appleProvider = new authExports.OAuthProvider('apple.com');
